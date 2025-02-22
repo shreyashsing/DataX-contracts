@@ -24,6 +24,7 @@ contract DataNFT is ERC721, ERC721URIStorage, Ownable {
     event NFTListed(uint256 indexed tokenId, uint256 price);
     event NFTSold(uint256 indexed tokenId, address buyer, uint256 price);
     event DataAccessed(uint256 indexed tokenId, address accessor);
+    event ListingPriceUpdated(uint256 indexed tokenId, uint256 newPrice);
 
     constructor() ERC721("DataNFT", "DNFT") {}
 
@@ -54,13 +55,22 @@ contract DataNFT is ERC721, ERC721URIStorage, Ownable {
         emit NFTListed(tokenId, priceInTokens);
     }
 
-    // Buy a listed NFT
+    // Update listing price
+    function updateListingPrice(uint256 tokenId, uint256 newPrice) external {
+        require(ownerOf(tokenId) == msg.sender, "Not the owner");
+        require(listings[tokenId].isActive, "NFT not listed");
+        listings[tokenId].price = newPrice;
+        emit ListingPriceUpdated(tokenId, newPrice);
+    }
+
+    // Buy a listed NFT with balance check
     function buyNFT(uint256 tokenId) external {
         Listing memory listing = listings[tokenId];
         require(listing.isActive, "Not listed");
         address seller = ownerOf(tokenId);
         address datatoken = datatokens[tokenId];
         uint256 price = listing.price;
+        require(IERC20(datatoken).balanceOf(msg.sender) >= price, "Insufficient DataTokens");
         require(IERC20(datatoken).transferFrom(msg.sender, seller, price), "Transfer failed");
         _transfer(seller, msg.sender, tokenId);
         delete listings[tokenId];
@@ -77,7 +87,6 @@ contract DataNFT is ERC721, ERC721URIStorage, Ownable {
             require(IERC20(datatoken).transferFrom(msg.sender, ownerOf(tokenId), tokenAmount), "Payment failed");
         }
         emit DataAccessed(tokenId, msg.sender);
-        // Off-chain systems can use the event to grant access
     }
 
     // Get Datatoken address for an NFT
@@ -99,14 +108,14 @@ contract DataNFT is ERC721, ERC721URIStorage, Ownable {
         super._burn(tokenId);
     }
 
-    // Restrict tokenURI to owners or DataToken holders
+    // Updated tokenURI with minimum DataToken requirement
     function tokenURI(uint256 tokenId) public view override(ERC721, ERC721URIStorage) returns (string memory) {
         require(_exists(tokenId), "NFT does not exist");
         address datatoken = datatokens[tokenId];
         if (datatoken != address(0)) {
             require(
-                IERC20(datatoken).balanceOf(msg.sender) > 0 || ownerOf(tokenId) == msg.sender,
-                "No access rights"
+                IERC20(datatoken).balanceOf(msg.sender) >= 1 * 10**18 || ownerOf(tokenId) == msg.sender,
+                "Must own at least 1 DataToken or the NFT"
             );
         }
         return super.tokenURI(tokenId);
