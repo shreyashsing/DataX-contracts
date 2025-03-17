@@ -1,0 +1,6 @@
+pandas
+spacy
+scikit-learn
+web3.py
+requests
+numpy

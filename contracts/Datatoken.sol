@@ -40,11 +40,10 @@ contract DataToken is ERC20, Ownable {
 
     // Buy tokens with Ether, respecting max supply
     function buyTokens(uint256 tokenAmount) external payable {
-        uint256 cost = tokenAmount * tokenPrice;
-        require(msg.value >= cost, "Insufficient Ether");
+        uint256 cost = (tokenAmount * tokenPrice) / 1 ether;
         require(totalSupply() + tokenAmount <= maxSupply, "Exceeds max supply");
-        require(balanceOf(owner()) >= tokenAmount, "Insufficient owner balance");
-        _transfer(owner(), msg.sender, tokenAmount);
+        require(msg.value >= cost, "Insufficient Ether");
+        _mint(msg.sender, tokenAmount);
         if (msg.value > cost) {
             payable(msg.sender).transfer(msg.value - cost);
         }

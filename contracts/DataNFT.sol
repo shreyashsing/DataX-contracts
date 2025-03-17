@@ -8,6 +8,7 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract DataNFT is ERC721, ERC721URIStorage, Ownable {
     uint256 private _tokenIds;
+    address public aiVerificationContract; // Address of AIVerification contract
 
     // Mapping from NFT ID to Datatoken address (ERC20)
     mapping(uint256 => address) public datatokens;
@@ -19,22 +20,32 @@ contract DataNFT is ERC721, ERC721URIStorage, Ownable {
     }
     mapping(uint256 => Listing) public listings;
 
-    event DataNFTMinted(uint256 indexed tokenId, string tokenURI, address owner);
+    event DataNFTMinted(uint256 indexed tokenId, string tokenURI, address owner, bytes32 datasetHash);
     event DatatokenLinked(uint256 indexed tokenId, address datatoken);
     event NFTListed(uint256 indexed tokenId, uint256 price);
     event NFTSold(uint256 indexed tokenId, address buyer, uint256 price);
     event DataAccessed(uint256 indexed tokenId, address accessor);
     event ListingPriceUpdated(uint256 indexed tokenId, uint256 newPrice);
+    event AIVerificationContractSet(address indexed aiVerificationContract);
 
     constructor() ERC721("DataNFT", "DNFT") {}
 
-    // Mint a new DataNFT with metadata
-    function mintNFT(string memory tokenURI) external onlyOwner returns (uint256) {
+    // Set the AIVerification contract address (only owner)
+    function setAIVerificationContract(address _aiVerificationContract) external onlyOwner {
+        aiVerificationContract = _aiVerificationContract;
+        emit AIVerificationContractSet(_aiVerificationContract);
+    }
+
+    // Mint a new DataNFT with metadata and AI verification
+    function mintNFT(string memory tokenURI, bytes32 datasetHash) external onlyOwner returns (uint256) {
+        require(aiVerificationContract != address(0), "AI Verification contract not set");
+        require(IAIVerification(aiVerificationContract).isDatasetVerified(datasetHash), "Dataset not verified");
+
         uint256 newTokenId = _tokenIds + 1;
         _tokenIds = newTokenId;
         _safeMint(msg.sender, newTokenId);
         _setTokenURI(newTokenId, tokenURI);
-        emit DataNFTMinted(newTokenId, tokenURI, msg.sender);
+        emit DataNFTMinted(newTokenId, tokenURI, msg.sender, datasetHash);
         return newTokenId;
     }
 
@@ -120,4 +131,9 @@ contract DataNFT is ERC721, ERC721URIStorage, Ownable {
         }
         return super.tokenURI(tokenId);
     }
+}
+
+// Interface for AIVerification contract
+interface IAIVerification {
+    function isDatasetVerified(bytes32 datasetHash) external view returns (bool);
 }
