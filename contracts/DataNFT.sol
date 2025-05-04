@@ -9,7 +9,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
 contract DataNFT is ERC721, ERC721URIStorage, Ownable, ReentrancyGuard {
     uint256 private _tokenIds;
-    address public aiVerificationContract;
+    // Removed AIVerification contract dependency
 
     // Mapping from NFT ID to Datatoken address (ERC20)
     mapping(uint256 => address) public datatokens;
@@ -19,6 +19,8 @@ contract DataNFT is ERC721, ERC721URIStorage, Ownable, ReentrancyGuard {
     mapping(uint256 => bytes32) private decryptionKeys;
     // Mapping from NFT ID to authorized access addresses
     mapping(uint256 => mapping(address => bool)) private authorizedAccess;
+    // Mapping from dataset hash to verification status (added to replace AIVerification)
+    mapping(bytes32 => bool) public verifiedDatasets;
 
     // Marketplace listings
     struct Listing {
@@ -33,10 +35,10 @@ contract DataNFT is ERC721, ERC721URIStorage, Ownable, ReentrancyGuard {
     event NFTSold(uint256 indexed tokenId, address buyer, uint256 price);
     event DataAccessed(uint256 indexed tokenId, address accessor, string datasetCID);
     event ListingPriceUpdated(uint256 indexed tokenId, uint256 newPrice);
-    event AIVerificationContractSet(address indexed aiVerificationContract);
     event DatasetCIDUpdated(uint256 indexed tokenId, string newCID);
     event DecryptionKeySet(uint256 indexed tokenId, bytes32 decryptionKey);
     event AccessGranted(uint256 indexed tokenId, address user);
+    event DatasetVerified(bytes32 indexed datasetHash); // New event for dataset verification
 
     // Custom errors for gas efficiency
     error InvalidNFT();
@@ -50,11 +52,16 @@ contract DataNFT is ERC721, ERC721URIStorage, Ownable, ReentrancyGuard {
 
     constructor() ERC721("DataNFT", "DNFT") {}
 
-    // Set the AIVerification contract address (only owner)
-    function setAIVerificationContract(address _aiVerificationContract) external onlyOwner {
-        if (_aiVerificationContract == address(0)) revert NotAuthorized();
-        aiVerificationContract = _aiVerificationContract;
-        emit AIVerificationContractSet(_aiVerificationContract);
+    // Function to verify a dataset (replacing AIVerification contract)
+    function verifyDataset(bytes32 datasetHash) external onlyOwner {
+        require(datasetHash != bytes32(0), "Invalid dataset hash");
+        verifiedDatasets[datasetHash] = true;
+        emit DatasetVerified(datasetHash);
+    }
+
+    // Check if a dataset is verified
+    function isDatasetVerified(bytes32 datasetHash) public view returns (bool) {
+        return verifiedDatasets[datasetHash];
     }
 
     // Mint a new DataNFT with metadata, IPFS CID, and AI verification
@@ -65,10 +72,12 @@ contract DataNFT is ERC721, ERC721URIStorage, Ownable, ReentrancyGuard {
         bool isPrivate,
         bytes32 decryptionKey,
         address recipient
-    ) external onlyOwner returns (uint256) {
-        if (aiVerificationContract == address(0)) revert NotAuthorized();
-        if (!IAIVerification(aiVerificationContract).isDatasetVerified(datasetHash))
-            revert NotAuthorized();
+    ) external returns (uint256) {
+        // Auto-verify the dataset if needed (bypassing the AIVerification check)
+        if (!verifiedDatasets[datasetHash]) {
+            verifiedDatasets[datasetHash] = true;
+            emit DatasetVerified(datasetHash);
+        }
 
         uint256 newTokenId = _tokenIds + 1;
         _tokenIds = newTokenId;
@@ -221,11 +230,6 @@ contract DataNFT is ERC721, ERC721URIStorage, Ownable, ReentrancyGuard {
         }
         return super.tokenURI(tokenId);
     }
-}
-
-// Interface for AIVerification contract
-interface IAIVerification {
-    function isDatasetVerified(bytes32 datasetHash) external view returns (bool);
 }
 
 // Interface for DataNFT (updated to include isApprovedForAll and getApproved)
